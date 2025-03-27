@@ -59,8 +59,18 @@ def display_subscription_plans():
     for feature in plans['premium']['features']:
         st.markdown(f"- {feature}")
 
-    if st.button("选择高级版", key="premium"):
-        logging.info(f"Button '选择高级版' clicked")
+    # 添加调试信息
+    if 'user_email' in st.session_state:
+        logging.info(f"User email in session: {st.session_state['user_email']}")
+        st.write(f"调试：当前用户邮箱 - {st.session_state['user_email']}")
+    else:
+        logging.info("No user_email in session")
+        st.write("调试：未检测到用户邮箱")
+
+    clicked = st.button("选择高级版", key="premium")
+    logging.info(f"Button '选择高级版' clicked status: {clicked}")
+    if clicked:
+        logging.info("Button '选择高级版' triggered")
         if 'user_email' in st.session_state:
             logging.info(f"User {st.session_state['user_email']} clicked premium subscription")
             session = create_checkout_session(
