@@ -7,6 +7,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 def init_stripe():
+    logging.info("Initializing Stripe configuration")
     return {
         "publishable_key": os.getenv("STRIPE_PUBLISHABLE_KEY"),
         "secret_key": os.getenv("STRIPE_SECRET_KEY"),
@@ -42,6 +43,7 @@ def handle_subscription_status(user_email: str) -> str:
     return "free"
 
 def display_subscription_plans():
+    logging.info("Displaying subscription plans")
     plans = {
         "premium": {
             "name": "高级版",
@@ -58,6 +60,7 @@ def display_subscription_plans():
         st.markdown(f"- {feature}")
 
     if st.button("选择高级版", key="premium"):
+        logging.info(f"Button '选择高级版' clicked")
         if 'user_email' in st.session_state:
             logging.info(f"User {st.session_state['user_email']} clicked premium subscription")
             session = create_checkout_session(
@@ -70,3 +73,5 @@ def display_subscription_plans():
                 st.markdown(f'<a href="{session.url}" target="_blank">点击此处前往支付页面</a>', unsafe_allow_html=True)
         else:
             st.warning("请先登录")
+    else:
+        logging.info("Button '选择高级版' not clicked yet")
