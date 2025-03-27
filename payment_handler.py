@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-API_BASE_URL = os.getenv('API_BASE_URL', 'https://156.225.26.202:5000')
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 
 
 def init_stripe():
