@@ -18,12 +18,18 @@ def create_checkout_session(price_id: str, user_email: str):
     try:
         logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
         checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card', 'alipay', 'wechat_pay'],  # 添加支付宝和微信支付
+            payment_method_types=['card', 'alipay', 'wechat_pay'],
             line_items=[{
-                'price': price_id,
+                'price_data': {
+                    'currency': 'cny',
+                    'unit_amount': 29900,  # 299元，单位为分
+                    'product_data': {
+                        'name': '高级版订阅',
+                    },
+                },
                 'quantity': 1,
             }],
-            mode='subscription',
+            mode='payment',  # 改为单次支付
             success_url="https://xiaomaoassistant.streamlit.app/?success=true",
             cancel_url="https://xiaomaoassistant.streamlit.app/?canceled=true",
             customer_email=user_email,
@@ -55,7 +61,7 @@ def display_subscription_plans():
 
     st.subheader("订阅计划")
     st.markdown(f"### {plans['premium']['name']}")
-    st.markdown(f"¥{plans['premium']['price']}/月")
+    st.markdown(f"¥{plans['premium']['price']}（一次性支付）")
     for feature in plans['premium']['features']:
         st.markdown(f"- {feature}")
 

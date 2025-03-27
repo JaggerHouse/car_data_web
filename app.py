@@ -8,7 +8,7 @@ from payment_handler import init_stripe, display_subscription_plans, handle_subs
 from cache_handler import CacheHandler
 import os
 from dotenv import load_dotenv
-import re  # 用于邮箱格式验证
+import re
 
 # 加载环境变量
 load_dotenv()
@@ -23,21 +23,17 @@ API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 stripe_config = init_stripe()
 cache_handler = CacheHandler()
 
-
 # 验证邮箱格式的函数
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
-
 # 简单内存用户存储（替代数据库）
 if 'users' not in st.session_state:
     st.session_state['users'] = {}
 
-
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
-
 
 def register_user(email, company_name, password):
     if not is_valid_email(email):
@@ -51,9 +47,8 @@ def register_user(email, company_name, password):
         'password': hash_password(password)
     }
     st.success("注册成功，请用邮箱登录")
-    time.sleep(2)  # 短暂延迟以显示提示
+    time.sleep(2)
     return True
-
 
 def login_user(email, password):
     if email in st.session_state['users']:
@@ -63,7 +58,6 @@ def login_user(email, password):
             st.session_state['user_email'] = email
             st.session_state['username'] = user['company_name']
             return True
-    # 允许默认测试账户
     if email == "hzhbond@hotmail.com" and password == "admin":
         st.session_state['logged_in'] = True
         st.session_state['user_email'] = email
@@ -72,13 +66,12 @@ def login_user(email, password):
     st.error('邮箱或密码错误')
     return False
 
-
 def fetch_brands_models(country="哈萨克KOLESA"):
     cached_data = cache_handler.get_brands_models_cache(country)
     if cached_data:
         logging.info(f"从缓存获取品牌和型号数据: {country}")
         return cached_data["brands"], cached_data["models"]
-
+    
     url = f"{API_BASE_URL}/api/brands_models?country={country}"
     try:
         response = requests.get(url, timeout=5)
@@ -91,12 +84,9 @@ def fetch_brands_models(country="哈萨克KOLESA"):
             return brands, models
     except requests.RequestException as e:
         logging.error(f"Failed to fetch brands/models from API: {e}")
-
-    default_data = {"brands": ["Zeekr", "BYD"],
-                    "models": {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}}
+    default_data = {"brands": ["Zeekr", "BYD"], "models": {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}}
     cache_handler.set_brands_models_cache(country, default_data)
     return default_data["brands"], default_data["models"]
-
 
 def fetch_data(country, brand, model):
     url = f"{API_BASE_URL}/api/data?country={country}&brand={brand}&model={model}"
@@ -104,7 +94,9 @@ def fetch_data(country, brand, model):
         response = requests.get(url, timeout=5)
         logging.info(f"Fetching data from API: {url}, Status: {response.status_code}")
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            st.write(f"调试：API 返回数据 - {data}")  # 调试输出
+            return data
         else:
             st.error("无法获取数据")
             return None
@@ -112,7 +104,6 @@ def fetch_data(country, brand, model):
         logging.error(f"Failed to fetch data from API: {e}")
         st.error("API 请求失败")
         return None
-
 
 # 初始化状态
 if 'logged_in' not in st.session_state:
@@ -126,7 +117,7 @@ if 'show_subscription' not in st.session_state:
 if not st.session_state['logged_in']:
     st.title("登录")
     tab1, tab2 = st.tabs(["登录", "注册"])
-
+    
     with tab1:
         email = st.text_input("邮箱", key="login_email")
         password = st.text_input("密码", type="password", key="login_password")
@@ -150,7 +141,7 @@ else:
             st.rerun()
     else:
         st.title("小贸助手 - 汽车数据分析平台")
-
+        
         col1, col2 = st.columns([3, 1])
         with col1:
             st.write(f"欢迎, {st.session_state['username']}!")
@@ -161,8 +152,7 @@ else:
                 st.session_state['username'] = ''
                 st.session_state['show_subscription'] = False
                 st.rerun()
-
-        # 提建议按钮和表单
+        
         if st.button("提建议"):
             with st.form(key="suggestion_form"):
                 suggestion = st.text_area("请输入您的建议")
