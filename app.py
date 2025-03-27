@@ -62,7 +62,6 @@ if not st.session_state['logged_in']:
             st.session_state['user_email'] = email
             st.session_state['username'] = "TestUser"
             st.success("登录成功！")
-            st.rerun()
         else:
             st.error("邮箱或密码错误")
 else:
