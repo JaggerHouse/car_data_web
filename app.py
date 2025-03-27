@@ -3,6 +3,7 @@ import requests
 import plotly.graph_objects as go
 import logging
 import hashlib
+import time
 from payment_handler import init_stripe, display_subscription_plans, handle_subscription_status
 from cache_handler import CacheHandler
 import os
@@ -25,7 +26,7 @@ cache_handler = CacheHandler()
 
 # 验证邮箱格式的函数
 def is_valid_email(email):
-    pattern = r'^[a-zA-Z0.9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
 
@@ -50,6 +51,7 @@ def register_user(email, company_name, password):
         'password': hash_password(password)
     }
     st.success("注册成功，请用邮箱登录")
+    time.sleep(2)  # 短暂延迟以显示提示
     return True
 
 
@@ -148,14 +150,33 @@ else:
             st.rerun()
     else:
         st.title("小贸助手 - 汽车数据分析平台")
-        st.write(f"欢迎, {st.session_state['username']}!")
-        st.write("调试：主页已加载")  # 调试信息
-        if st.button("退出登录"):
-            st.session_state['logged_in'] = False
-            st.session_state['user_email'] = ''
-            st.session_state['username'] = ''
-            st.session_state['show_subscription'] = False
-            st.rerun()
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"欢迎, {st.session_state['username']}!")
+        with col2:
+            if st.button("退出登录"):
+                st.session_state['logged_in'] = False
+                st.session_state['user_email'] = ''
+                st.session_state['username'] = ''
+                st.session_state['show_subscription'] = False
+                st.rerun()
+
+        # 提建议按钮和表单
+        if st.button("提建议"):
+            with st.form(key="suggestion_form"):
+                suggestion = st.text_area("请输入您的建议")
+                contact_email = st.text_input("您的邮箱（若建议被采纳，我们会联系您）")
+                submit_button = st.form_submit_button(label="提交")
+                if submit_button:
+                    if not suggestion or not contact_email:
+                        st.error("建议和邮箱不能为空")
+                    elif not is_valid_email(contact_email):
+                        st.error("邮箱格式不正确")
+                    else:
+                        st.success("感谢您的建议！我们会认真考虑，并在采纳时通过邮箱联系您。")
+                        with open("suggestions.txt", "a", encoding="utf-8") as f:
+                            f.write(f"邮箱: {contact_email}, 建议: {suggestion}, 时间: {time.ctime()}\n")
 
         subscription_status = handle_subscription_status(st.session_state['user_email'])
         if subscription_status == "free":
@@ -175,4 +196,9 @@ else:
             data = fetch_data(country, brand, model)
             if data:
                 fig = go.Figure(data=[go.Bar(x=data.get("dates", []), y=data.get("values", []))])
+                fig.update_layout(
+                    title=f"{country} - {brand} {model} 数据",
+                    xaxis_title="日期",
+                    yaxis_title="值"
+                )
                 st.plotly_chart(fig)
