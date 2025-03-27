@@ -23,9 +23,9 @@ def create_checkout_session(price_id: str, user_email: str):
     try:
         logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
         checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card', 'alipay', 'wechat_pay'],
+            payment_method_types=['card', 'apple_pay', 'google_pay'],
             payment_method_options={
-                'wechat_pay': {
+                'card': {
                     'client': 'web'
                 }
             },
@@ -102,7 +102,7 @@ def display_subscription_plans():
             "name": "高级版",
             "price": 299,
             "price_id": os.getenv("STRIPE_PREMIUM_PRICE_ID", "price_premium"),
-            "features": ["无限次数据查询", "实时数据更新", "高级数据分析", "自定义报表", "API访问权限"]
+            "features": ["无限次数据查询", "实时数据更新", "API访问权限"]
         }
     }
 
