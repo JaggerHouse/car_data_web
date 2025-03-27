@@ -34,26 +34,6 @@ def is_valid_email(email):
     return re.match(pattern, email) is not None
 
 
-# 用户数据持久化
-def load_users():
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logging.error(f"Failed to load users: {e}")
-    return {}
-
-
-def save_users(users):
-    try:
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users, f, ensure_ascii=False, indent=2)
-        logging.info("Users data saved successfully")
-    except Exception as e:
-        logging.error(f"Failed to save users: {e}")
-
-
 def register_user(email, company_name, password):
     users = load_users()
     if not is_valid_email(email):

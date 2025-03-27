@@ -3,11 +3,11 @@ import streamlit as st
 import os
 import logging
 from datetime import datetime, timedelta
-from app import load_users, save_users
+import json
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-
+USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
 
 def init_stripe():
     logging.info("Initializing Stripe configuration")
@@ -17,6 +17,23 @@ def init_stripe():
         "webhook_secret": os.getenv("STRIPE_WEBHOOK_SECRET")
     }
 
+# 用户数据持久化
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Failed to load users: {e}")
+    return {}
+
+def save_users(users):
+    try:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        logging.info("Users data saved successfully")
+    except Exception as e:
+        logging.error(f"Failed to save users: {e}")
 
 def create_checkout_session(price_id: str, user_email: str):
     try:
