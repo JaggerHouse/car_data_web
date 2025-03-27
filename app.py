@@ -5,7 +5,6 @@ import logging
 import hashlib
 import time
 import os
-from datetime import datetime, timedelta
 from payment_handler import init_stripe, display_subscription_plans, handle_subscription_status
 from cache_handler import CacheHandler
 from dotenv import load_dotenv
@@ -27,7 +26,7 @@ cache_handler = CacheHandler()
 
 # 验证邮箱格式的函数
 def is_valid_email(email):
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a.zA-Z]{2,}$'
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
 def hash_password(password):

@@ -79,7 +79,6 @@ def handle_subscription_status(user_email: str) -> str:
                 if datetime.now() < expiry_date:
                     return "premium"
                 else:
-                    # 更新为过期状态
                     payload = {
                         'email': user_email,
                         'subscription_status': 'free',
