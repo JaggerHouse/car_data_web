@@ -44,17 +44,14 @@ def handle_subscription_status(user_email: str) -> str:
 
 
 def display_subscription_plans():
-    # 硬编码订阅计划（后续可从环境变量或数据库动态加载）
     plans = {
         "premium": {
             "name": "高级版",
-            "price": 299,  # 单位：人民币，分
+            "price": 299,
             "price_id": os.getenv("STRIPE_PREMIUM_PRICE_ID", "price_premium"),
             "features": [
                 "无限次数据查询",
                 "实时数据更新",
-                "高级数据分析",
-                "自定义报表",
                 "API访问权限"
             ]
         }
@@ -73,9 +70,8 @@ def display_subscription_plans():
                 st.session_state['user_email']
             )
             if session:
-                # 使用 Streamlit 的方式跳转
-                st.write(f"[点击支付](#{session.url})")
-                # 或用 JavaScript，但需确保安全性
-                # st.markdown(f'<script>window.location.href="{session.url}";</script>', unsafe_allow_html=True)
+                # 显示支付按钮并自动跳转
+                st.markdown(f"正在跳转到支付页面，请稍候...")
+                st.markdown(f'<meta http-equiv="refresh" content="0;url={session.url}">', unsafe_allow_html=True)
         else:
             st.warning("请先登录")
