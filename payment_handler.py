@@ -67,21 +67,20 @@ def display_subscription_plans():
         logging.info("No user_email in session")
         st.write("调试：未检测到用户邮箱")
 
-    # 使用表单捕获按钮点击
-    with st.form(key="premium_subscription_form"):
-        submit = st.form_submit_button(label="选择高级版")
-        logging.info(f"Form submit button status: {submit}")
-        if submit:
-            logging.info("Form '选择高级版' submitted")
-            if 'user_email' in st.session_state:
-                logging.info(f"User {st.session_state['user_email']} clicked premium subscription")
-                session = create_checkout_session(
-                    plans['premium']['price_id'],
-                    st.session_state['user_email']
-                )
-                if session:
-                    st.success("支付会话创建成功！")
-                    st.write(f"支付链接: {session.url}")
-                    st.markdown(f'<a href="{session.url}" target="_blank">点击此处前往支付页面</a>', unsafe_allow_html=True)
-            else:
-                st.warning("请先登录")
+    # 使用 st.button 并避免页面刷新
+    if st.button("选择高级版", key="premium"):
+        logging.info("Button '选择高级版' clicked")
+        if 'user_email' in st.session_state:
+            logging.info(f"User {st.session_state['user_email']} clicked premium subscription")
+            session = create_checkout_session(
+                plans['premium']['price_id'],
+                st.session_state['user_email']
+            )
+            if session:
+                st.success("支付会话创建成功！")
+                st.write(f"支付链接: {session.url}")
+                st.markdown(f'<a href="{session.url}" target="_blank">点击此处前往支付页面</a>', unsafe_allow_html=True)
+        else:
+            st.warning("请先登录")
+    else:
+        logging.info("Button '选择高级版' not clicked yet")
