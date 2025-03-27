@@ -6,6 +6,7 @@ import hashlib
 import time
 import os
 import json
+from datetime import datetime, timedelta
 from payment_handler import init_stripe, display_subscription_plans, handle_subscription_status
 from cache_handler import CacheHandler
 from dotenv import load_dotenv
@@ -20,6 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # API 和本地文件配置
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 LOCAL_BRANDS_MODELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brands_models.json")
+USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
 
 # 初始化Stripe和缓存系统
 stripe_config = init_stripe()
@@ -32,34 +34,50 @@ def is_valid_email(email):
     return re.match(pattern, email) is not None
 
 
-# 简单内存用户存储（替代数据库）
-if 'users' not in st.session_state:
-    st.session_state['users'] = {}
+# 用户数据持久化
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Failed to load users: {e}")
+    return {}
 
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+def save_users(users):
+    try:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        logging.info("Users data saved successfully")
+    except Exception as e:
+        logging.error(f"Failed to save users: {e}")
 
 
 def register_user(email, company_name, password):
+    users = load_users()
     if not is_valid_email(email):
         st.error('邮箱格式不正确，必须是 xxxx@xxxx.com 的形式')
         return False
-    if email in st.session_state['users']:
+    if email in users:
         st.error('该邮箱已注册')
         return False
-    st.session_state['users'][email] = {
+    users[email] = {
         'company_name': company_name,
-        'password': hash_password(password)
+        'password': hash_password(password),
+        'subscription_status': 'free',
+        'subscription_expiry': None
     }
+    save_users(users)
     st.success("注册成功，请用邮箱登录")
     time.sleep(2)
     return True
 
 
 def login_user(email, password):
-    if email in st.session_state['users']:
-        user = st.session_state['users'][email]
+    users = load_users()
+    if email in users:
+        user = users[email]
         if user['password'] == hash_password(password):
             st.session_state['logged_in'] = True
             st.session_state['user_email'] = email
@@ -69,6 +87,14 @@ def login_user(email, password):
         st.session_state['logged_in'] = True
         st.session_state['user_email'] = email
         st.session_state['username'] = "TestUser"
+        if email not in users:
+            users[email] = {
+                'company_name': "TestUser",
+                'password': hash_password(password),
+                'subscription_status': 'free',
+                'subscription_expiry': None
+            }
+            save_users(users)
         return True
     st.error('邮箱或密码错误')
     return False
@@ -118,7 +144,6 @@ def fetch_data(country, brand, model, data_type, trend):
         logging.info(f"Fetching data from: {url}, Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()["data"]
-            st.write(f"调试：API 返回数据 - {data}")
             return data
         else:
             return {"x": ["请求错误"], "y": [0]}

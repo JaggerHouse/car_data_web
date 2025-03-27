@@ -2,9 +2,12 @@ import stripe
 import streamlit as st
 import os
 import logging
+from datetime import datetime, timedelta
+from app import load_users, save_users
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+
 
 def init_stripe():
     logging.info("Initializing Stripe configuration")
@@ -14,6 +17,7 @@ def init_stripe():
         "webhook_secret": os.getenv("STRIPE_WEBHOOK_SECRET")
     }
 
+
 def create_checkout_session(price_id: str, user_email: str):
     try:
         logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
@@ -21,7 +25,7 @@ def create_checkout_session(price_id: str, user_email: str):
             payment_method_types=['card', 'alipay', 'wechat_pay'],
             payment_method_options={
                 'wechat_pay': {
-                    'client': 'web'  # 添加微信支付的客户端类型
+                    'client': 'web'
                 }
             },
             line_items=[{
@@ -29,7 +33,7 @@ def create_checkout_session(price_id: str, user_email: str):
                     'currency': 'cny',
                     'unit_amount': 29900,  # 299元，单位为分
                     'product_data': {
-                        'name': '高级版订阅',
+                        'name': '高级版订阅（1个月）',
                     },
                 },
                 'quantity': 1,
@@ -46,12 +50,29 @@ def create_checkout_session(price_id: str, user_email: str):
         st.error(f"创建支付会话失败: {str(e)}")
         return None
 
+
 def handle_subscription_status(user_email: str) -> str:
+    users = load_users()
     query_params = st.query_params
     if "success" in query_params and query_params["success"] == "true":
-        logging.info(f"User {user_email} upgraded to premium")
-        return "premium"
+        if user_email in users:
+            users[user_email]['subscription_status'] = 'premium'
+            users[user_email]['subscription_expiry'] = (datetime.now() + timedelta(days=30)).isoformat()
+            save_users(users)
+            logging.info(f"User {user_email} upgraded to premium, expiry: {users[user_email]['subscription_expiry']}")
+            return "premium"
+
+    if user_email in users and users[user_email]['subscription_status'] == 'premium':
+        expiry_date = datetime.fromisoformat(users[user_email]['subscription_expiry'])
+        if datetime.now() < expiry_date:
+            return "premium"
+        else:
+            users[user_email]['subscription_status'] = 'free'
+            users[user_email]['subscription_expiry'] = None
+            save_users(users)
+            logging.info(f"User {user_email} subscription expired")
     return "free"
+
 
 def display_subscription_plans():
     logging.info("Displaying subscription plans")
@@ -66,12 +87,11 @@ def display_subscription_plans():
 
     st.subheader("订阅计划")
     st.markdown(f"### {plans['premium']['name']}")
-    st.markdown(f"¥{plans['premium']['price']}（一次性支付）")
+    st.markdown(f"¥{plans['premium']['price']}（一次性支付，1个月）")
     for feature in plans['premium']['features']:
         st.markdown(f"- {feature}")
 
     if 'user_email' in st.session_state:
-        st.write(f"调试：当前用户邮箱 - {st.session_state['user_email']}")
         if st.button("选择高级版", key="premium"):
             logging.info("Button '选择高级版' clicked")
             session = create_checkout_session(
