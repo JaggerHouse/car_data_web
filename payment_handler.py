@@ -1,27 +1,19 @@
 import stripe
-import yaml
-from typing import Dict, Any
 import streamlit as st
 import os
+from datetime import datetime
 
-def load_stripe_config() -> Dict[str, Any]:
-    with open('stripe_config.yaml', 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    # 从环境变量中获取敏感配置
-    config['stripe']['publishable_key'] = os.getenv('STRIPE_PUBLISHABLE_KEY')
-    config['stripe']['secret_key'] = os.getenv('STRIPE_SECRET_KEY')
-    config['stripe']['webhook_secret'] = os.getenv('STRIPE_WEBHOOK_SECRET')
-    return config
+# 从环境变量加载配置
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+
 
 def init_stripe():
-    stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
     return {
-        'stripe': {
-            'publishable_key': os.getenv('STRIPE_PUBLISHABLE_KEY'),
-            'secret_key': os.getenv('STRIPE_SECRET_KEY'),
-            'webhook_secret': os.getenv('STRIPE_WEBHOOK_SECRET')
-        }
+        "publishable_key": os.getenv("STRIPE_PUBLISHABLE_KEY"),
+        "secret_key": os.getenv("STRIPE_SECRET_KEY"),
+        "webhook_secret": os.getenv("STRIPE_WEBHOOK_SECRET")
     }
+
 
 def create_checkout_session(price_id: str, user_email: str):
     try:
@@ -32,8 +24,8 @@ def create_checkout_session(price_id: str, user_email: str):
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url=st.get_url() + '?success=true',
-            cancel_url=st.get_url() + '?canceled=true',
+            success_url="https://xiaomaoassistant.streamlit.app/?success=true",
+            cancel_url="https://xiaomaoassistant.streamlit.app/?canceled=true",
             customer_email=user_email,
         )
         return checkout_session
@@ -41,34 +33,35 @@ def create_checkout_session(price_id: str, user_email: str):
         st.error(f"创建支付会话失败: {str(e)}")
         return None
 
+
 def handle_subscription_status(user_email: str) -> str:
-    try:
-        from models import get_db_session, User
-        db_session = get_db_session()
-        user = db_session.query(User).filter_by(email=user_email).first()
-        
-        if not user:
-            return "free"
-            
-        if user.subscription_status in ['basic', 'premium']:
-            # 检查订阅是否过期
-            if user.subscription_end_date and user.subscription_end_date > datetime.utcnow():
-                return user.subscription_status
-        
-        return "free"
-    except Exception as e:
-        st.error(f"获取订阅状态失败: {str(e)}")
-        return "free"
-    finally:
-        if 'db_session' in locals():
-            db_session.close()
+    # 临时逻辑：后续接入数据库或 Stripe API
+    # 当前返回 "free"，支付成功后可通过 URL 参数临时更新
+    query_params = st.query_params
+    if "success" in query_params and query_params["success"] == "true":
+        return "premium"
+    return "free"
+
 
 def display_subscription_plans():
-    config = load_stripe_config()
-    plans = config['subscription_plans']
-    
+    # 硬编码订阅计划（后续可从环境变量或数据库动态加载）
+    plans = {
+        "premium": {
+            "name": "高级版",
+            "price": 299,  # 单位：人民币，分
+            "price_id": os.getenv("STRIPE_PREMIUM_PRICE_ID", "price_premium"),
+            "features": [
+                "无限次数据查询",
+                "实时数据更新",
+                "高级数据分析",
+                "自定义报表",
+                "API访问权限"
+            ]
+        }
+    }
+
     st.subheader("订阅计划")
-    
+
     st.markdown(f"### {plans['premium']['name']}")
     st.markdown(f"¥{plans['premium']['price']}/月")
     for feature in plans['premium']['features']:
@@ -77,9 +70,12 @@ def display_subscription_plans():
         if 'user_email' in st.session_state:
             session = create_checkout_session(
                 plans['premium']['price_id'],
-                st.session_state.user_email
+                st.session_state['user_email']
             )
             if session:
-                st.markdown(f'<script>window.location.href="{session.url}";</script>', unsafe_allow_html=True)
+                # 使用 Streamlit 的方式跳转
+                st.write(f"[点击支付](#{session.url})")
+                # 或用 JavaScript，但需确保安全性
+                # st.markdown(f'<script>window.location.href="{session.url}";</script>', unsafe_allow_html=True)
         else:
             st.warning("请先登录")
