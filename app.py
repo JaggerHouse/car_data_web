@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # API 配置
-API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:8000')
+API_BASE_URL = os.getenv('API_BASE_URL', 'https://f166-156-225-26-202.ngrok-free.app')
 LOCAL_BRANDS_MODELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brands_models.json")
 
 # 初始化 Stripe
