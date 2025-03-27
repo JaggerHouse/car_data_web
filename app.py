@@ -118,13 +118,25 @@ def fetch_data(country, brand, model, data_type, trend):
         logging.info(f"Fetching data from: {url}, Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()["data"]
-            st.write(f"调试：API 返回数据 - {data}")  # 调试输出
+            st.write(f"调试：API 返回数据 - {data}")
             return data
         else:
             return {"x": ["请求错误"], "y": [0]}
     except requests.RequestException as e:
         logging.error(f"Failed to fetch data: {e}")
         return {"x": ["网络错误"], "y": [0]}
+
+
+def format_price_range(price_str, currency="KZT"):
+    try:
+        start, end = map(float, price_str.strip("()[]").split(", "))
+        if currency in ["KZT", "RUB"]:
+            return f"{start / 1000000:.2f}-{end / 1000000:.2f}百万"
+        elif currency == "USD":
+            return f"{start / 1000:.1f}-{end / 1000:.1f}k"
+        return f"{int(start)}-{int(end)}"
+    except:
+        return price_str
 
 
 # 初始化状态
@@ -239,7 +251,7 @@ else:
             if data:
                 fig = go.Figure()
                 if "价格区间-广告量" in trend:
-                    x = [f"{x.split(' - ')[0]}-{x.split(' - ')[1]}" for x in data["x"]]
+                    x = [format_price_range(x, "KZT" if country == "哈萨克KOLESA" else "RUB") for x in data["x"]]
                     fig.add_trace(go.Bar(x=x, y=data["y"], name="广告量"))
                     fig.update_layout(xaxis_title="价格区间", yaxis_title="广告数量")
                 elif "价格-观看量" in trend:

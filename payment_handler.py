@@ -19,6 +19,11 @@ def create_checkout_session(price_id: str, user_email: str):
         logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card', 'alipay', 'wechat_pay'],
+            payment_method_options={
+                'wechat_pay': {
+                    'client': 'web'  # 添加微信支付的客户端类型
+                }
+            },
             line_items=[{
                 'price_data': {
                     'currency': 'cny',
@@ -29,7 +34,7 @@ def create_checkout_session(price_id: str, user_email: str):
                 },
                 'quantity': 1,
             }],
-            mode='payment',  # 改为单次支付
+            mode='payment',
             success_url="https://xiaomaoassistant.streamlit.app/?success=true",
             cancel_url="https://xiaomaoassistant.streamlit.app/?canceled=true",
             customer_email=user_email,
