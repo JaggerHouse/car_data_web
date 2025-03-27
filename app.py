@@ -46,44 +46,53 @@ def fetch_brands_models(country="哈萨克KOLESA"):
     return default_data["brands"], default_data["models"]
 
 
+# 初始化状态
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user_email'] = ''
     st.session_state['username'] = ''
+if 'page' not in st.session_state:
+    st.session_state['page'] = 'login'  # 默认登录页
 
+# 页面逻辑
 if not st.session_state['logged_in']:
     st.title("登录")
     email = st.text_input("邮箱", key="login_email")
     password = st.text_input("密码", type="password", key="login_password")
     if st.button("登录", key="login_button"):
-        # 临时硬编码登录
         if email == "hzhbond@hotmail.com" and password == "admin":
             st.session_state['logged_in'] = True
             st.session_state['user_email'] = email
             st.session_state['username'] = "TestUser"
+            st.session_state['page'] = 'main'
             st.success("登录成功！")
-        else:
-            st.error("邮箱或密码错误")
 else:
-    st.title("小贸助手 - 汽车数据分析平台")
-    st.write(f"欢迎, {st.session_state['username']}!")
-    if st.button("退出登录"):
-        st.session_state['logged_in'] = False
-        st.rerun()
+    if st.session_state['page'] == 'main':
+        st.title("小贸助手 - 汽车数据分析平台")
+        st.write(f"欢迎, {st.session_state['username']}!")
+        if st.button("退出登录"):
+            st.session_state['logged_in'] = False
+            st.session_state['page'] = 'login'
+            st.rerun()
 
-    subscription_status = handle_subscription_status(st.session_state['user_email'])
-    if subscription_status == "free":
-        st.warning("您当前使用的是免费版本，5次体验查询机会，升级到高级版本无限次查询每日更新数据！")
-        if st.button("查看订阅计划"):
-            logging.info("Clicked '查看订阅计划'")
-            display_subscription_plans()
-    else:
-        st.success("您当前是高级版用户，享有全部功能权限！")
+        subscription_status = handle_subscription_status(st.session_state['user_email'])
+        if subscription_status == "free":
+            st.warning("您当前使用的是免费版本，5次体验查询机会，升级到高级版本无限次查询每日更新数据！")
+            if st.button("查看订阅计划"):
+                logging.info("Clicked '查看订阅计划'")
+                st.session_state['page'] = 'subscription'
+        else:
+            st.success("您当前是高级版用户，享有全部功能权限！")
 
-    countries = ["俄罗斯AVITO", "俄罗斯AUTORU", "哈萨克KOLESA"]
-    country = st.selectbox("国家", countries, index=2)
-    brands, models = fetch_brands_models(country)
-    brand = st.selectbox("品牌", brands)
-    model = st.selectbox("型号", models[brand])
-    if st.button("生成图表"):
-        st.write("图表功能暂未实现")
+        countries = ["俄罗斯AVITO", "俄罗斯AUTORU", "哈萨克KOLESA"]
+        country = st.selectbox("国家", countries, index=2)
+        brands, models = fetch_brands_models(country)
+        brand = st.selectbox("品牌", brands)
+        model = st.selectbox("型号", models[brand])
+        if st.button("生成图表"):
+            st.write("图表功能暂未实现")
+
+    elif st.session_state['page'] == 'subscription':
+        display_subscription_plans()
+        if st.button("返回主页"):
+            st.session_state['page'] = 'main'
