@@ -26,9 +26,9 @@ def create_checkout_session(price_id: str, user_email: str):
             payment_method_types=['card'],
             # payment_method_types=['card', 'alipay', 'wechat_pay', 'apple_pay', 'google_pay'],  # 完整版，未来启用时取消注释
             payment_method_options={
-                'card': {
-                    'client': 'web'
-                }
+                # 'card': {
+                #     'client': 'web'
+                # }
                 # 'wechat_pay': {  # 注释掉 WeChat Pay 配置
                 #     'client': 'web'
                 # }
