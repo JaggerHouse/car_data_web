@@ -1,9 +1,9 @@
 import stripe
 import streamlit as st
 import os
-from datetime import datetime
+import logging
 
-# 从环境变量加载配置
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 
@@ -17,6 +17,7 @@ def init_stripe():
 
 def create_checkout_session(price_id: str, user_email: str):
     try:
+        logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
@@ -28,17 +29,18 @@ def create_checkout_session(price_id: str, user_email: str):
             cancel_url="https://xiaomaoassistant.streamlit.app/?canceled=true",
             customer_email=user_email,
         )
+        logging.info(f"Checkout session created: {checkout_session.url}")
         return checkout_session
     except Exception as e:
+        logging.error(f"Failed to create checkout session: {str(e)}")
         st.error(f"创建支付会话失败: {str(e)}")
         return None
 
 
 def handle_subscription_status(user_email: str) -> str:
-    # 临时逻辑：后续接入数据库或 Stripe API
-    # 当前返回 "free"，支付成功后可通过 URL 参数临时更新
     query_params = st.query_params
     if "success" in query_params and query_params["success"] == "true":
+        logging.info(f"User {user_email} upgraded to premium")
         return "premium"
     return "free"
 
@@ -49,29 +51,29 @@ def display_subscription_plans():
             "name": "高级版",
             "price": 299,
             "price_id": os.getenv("STRIPE_PREMIUM_PRICE_ID", "price_premium"),
-            "features": [
-                "无限次数据查询",
-                "实时数据更新",
-                "API访问权限"
-            ]
+            "features": ["无限次数据查询", "实时数据更新", "高级数据分析", "自定义报表", "API访问权限"]
         }
     }
 
     st.subheader("订阅计划")
-
     st.markdown(f"### {plans['premium']['name']}")
     st.markdown(f"¥{plans['premium']['price']}/月")
     for feature in plans['premium']['features']:
         st.markdown(f"- {feature}")
+
     if st.button("选择高级版", key="premium"):
         if 'user_email' in st.session_state:
+            logging.info(f"User {st.session_state['user_email']} clicked premium subscription")
             session = create_checkout_session(
                 plans['premium']['price_id'],
                 st.session_state['user_email']
             )
             if session:
-                # 显示支付按钮并自动跳转
-                st.markdown(f"正在跳转到支付页面，请稍候...")
-                st.markdown(f'<meta http-equiv="refresh" content="0;url={session.url}">', unsafe_allow_html=True)
+                st.success("正在跳转到支付页面...")
+                # 尝试直接跳转
+                st.markdown(f'<a href="{session.url}" target="_blank">点击此处前往支付页面</a>', unsafe_allow_html=True)
+                # 或用按钮
+                if st.button("立即支付", key="redirect"):
+                    st.markdown(f'<script>window.location.href="{session.url}";</script>', unsafe_allow_html=True)
         else:
             st.warning("请先登录")
