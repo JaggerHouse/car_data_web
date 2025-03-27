@@ -18,7 +18,7 @@ def create_checkout_session(price_id: str, user_email: str):
     try:
         logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
         checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
+            payment_method_types=['card', 'alipay', 'wechat_pay'],  # 添加支付宝和微信支付
             line_items=[{
                 'price': price_id,
                 'quantity': 1,
@@ -59,19 +59,10 @@ def display_subscription_plans():
     for feature in plans['premium']['features']:
         st.markdown(f"- {feature}")
 
-    # 显示用户信息
     if 'user_email' in st.session_state:
-        logging.info(f"User email in session: {st.session_state['user_email']}")
         st.write(f"调试：当前用户邮箱 - {st.session_state['user_email']}")
-    else:
-        logging.info("No user_email in session")
-        st.write("调试：未检测到用户邮箱")
-
-    # 使用 st.button 并避免页面刷新
-    if st.button("选择高级版", key="premium"):
-        logging.info("Button '选择高级版' clicked")
-        if 'user_email' in st.session_state:
-            logging.info(f"User {st.session_state['user_email']} clicked premium subscription")
+        if st.button("选择高级版", key="premium"):
+            logging.info("Button '选择高级版' clicked")
             session = create_checkout_session(
                 plans['premium']['price_id'],
                 st.session_state['user_email']
@@ -80,7 +71,5 @@ def display_subscription_plans():
                 st.success("支付会话创建成功！")
                 st.write(f"支付链接: {session.url}")
                 st.markdown(f'<a href="{session.url}" target="_blank">点击此处前往支付页面</a>', unsafe_allow_html=True)
-        else:
-            st.warning("请先登录")
     else:
-        logging.info("Button '选择高级版' not clicked yet")
+        st.warning("请先登录")
