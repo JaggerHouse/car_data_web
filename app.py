@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # API 配置
-API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:8000')
 LOCAL_BRANDS_MODELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brands_models.json")
 
 # 初始化 Stripe
@@ -208,7 +208,7 @@ else:
 
         if st.button("提建议"):
             with st.form(key="suggestion_form"):
-                suggestion = st.text_area("请输入您的建议")
+                suggestion = st.text_area("请输入您的建议(紧急问题可联系平台Wechat/WhatsApp: +8615820285642)")
                 contact_email = st.text_input("您的邮箱（若建议被采纳，我们会联系您）")
                 submit_button = st.form_submit_button(label="提交")
                 if submit_button:
@@ -217,7 +217,7 @@ else:
                     elif not is_valid_email(contact_email):
                         st.error("邮箱格式不正确")
                     else:
-                        st.success("感谢您的建议！我们会认真考虑，并在采纳时通过邮箱联系您。")
+                        st.success("感谢您的建议！紧急问题可联系平台Wechat/WhatsApp: +8615820285642")
                         with open("suggestions.txt", "a", encoding="utf-8") as f:
                             f.write(f"邮箱: {contact_email}, 建议: {suggestion}, 时间: {time.ctime()}\n")
 
