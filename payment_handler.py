@@ -23,7 +23,7 @@ def create_checkout_session(price_id: str, user_email: str):
     try:
         logging.info(f"Creating checkout session for {user_email} with price_id: {price_id}")
         checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card', 'apple_pay', 'google_pay'],
+            payment_method_types=['card'],
             # payment_method_types=['card', 'alipay', 'wechat_pay', 'apple_pay', 'google_pay'],  # 完整版，未来启用时取消注释
             payment_method_options={
                 'card': {
