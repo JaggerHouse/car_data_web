@@ -4,9 +4,10 @@ import plotly.graph_objects as go
 import logging
 import hashlib
 import time
+import os
+import json
 from payment_handler import init_stripe, display_subscription_plans, handle_subscription_status
 from cache_handler import CacheHandler
-import os
 from dotenv import load_dotenv
 import re
 
@@ -16,24 +17,29 @@ load_dotenv()
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# 从环境变量获取API配置
+# API 和本地文件配置
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
+LOCAL_BRANDS_MODELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brands_models.json")
 
 # 初始化Stripe和缓存系统
 stripe_config = init_stripe()
 cache_handler = CacheHandler()
+
 
 # 验证邮箱格式的函数
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+
 # 简单内存用户存储（替代数据库）
 if 'users' not in st.session_state:
     st.session_state['users'] = {}
 
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
 
 def register_user(email, company_name, password):
     if not is_valid_email(email):
@@ -49,6 +55,7 @@ def register_user(email, company_name, password):
     st.success("注册成功，请用邮箱登录")
     time.sleep(2)
     return True
+
 
 def login_user(email, password):
     if email in st.session_state['users']:
@@ -66,12 +73,8 @@ def login_user(email, password):
     st.error('邮箱或密码错误')
     return False
 
-def fetch_brands_models(country="哈萨克KOLESA"):
-    cached_data = cache_handler.get_brands_models_cache(country)
-    if cached_data:
-        logging.info(f"从缓存获取品牌和型号数据: {country}")
-        return cached_data["brands"], cached_data["models"]
-    
+
+def fetch_brands_models_from_api(country="哈萨克KOLESA"):
     url = f"{API_BASE_URL}/api/brands_models?country={country}"
     try:
         response = requests.get(url, timeout=5)
@@ -80,30 +83,49 @@ def fetch_brands_models(country="哈萨克KOLESA"):
             data = response.json()
             brands = data.get("brands", ["Zeekr", "BYD"])
             models = data.get("models", {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]})
-            cache_handler.set_brands_models_cache(country, {"brands": brands, "models": models})
             return brands, models
     except requests.RequestException as e:
         logging.error(f"Failed to fetch brands/models from API: {e}")
-    default_data = {"brands": ["Zeekr", "BYD"], "models": {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}}
-    cache_handler.set_brands_models_cache(country, default_data)
-    return default_data["brands"], default_data["models"]
+    return ["Zeekr", "BYD"], {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}
 
-def fetch_data(country, brand, model):
-    url = f"{API_BASE_URL}/api/data?country={country}&brand={brand}&model={model}"
+
+def save_brands_models_to_local(brands, models):
+    data = {"brands": brands, "models": models}
+    try:
+        with open(LOCAL_BRANDS_MODELS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logging.info(f"Saved brands/models to {LOCAL_BRANDS_MODELS_FILE}")
+    except Exception as e:
+        logging.error(f"Failed to save brands/models: {e}")
+
+
+def load_brands_models_from_local():
+    if os.path.exists(LOCAL_BRANDS_MODELS_FILE):
+        try:
+            with open(LOCAL_BRANDS_MODELS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get("brands", ["Zeekr", "BYD"]), data.get("models", {"Zeekr": ["7X", "001", "全车型"],
+                                                                                 "BYD": ["Han", "Song", "全车型"]})
+        except Exception as e:
+            logging.error(f"Failed to load local brands/models: {e}")
+    return ["Zeekr", "BYD"], {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}
+
+
+def fetch_data(country, brand, model, data_type, trend):
+    url = f"{API_BASE_URL}/api/trend?country={country}&brand={brand}&model={model}&data_type={data_type}&type={trend}"
     try:
         response = requests.get(url, timeout=5)
-        logging.info(f"Fetching data from API: {url}, Status: {response.status_code}")
+        logging.info(f"Fetching data from: {url}, Status: {response.status_code}")
         if response.status_code == 200:
-            data = response.json()
+            data = response.json()["data"]
             st.write(f"调试：API 返回数据 - {data}")  # 调试输出
             return data
         else:
-            st.error("无法获取数据")
-            return None
+            return {"x": ["请求错误"], "y": [0]}
     except requests.RequestException as e:
-        logging.error(f"Failed to fetch data from API: {e}")
-        st.error("API 请求失败")
-        return None
+        logging.error(f"Failed to fetch data: {e}")
+        return {"x": ["网络错误"], "y": [0]}
+
 
 # 初始化状态
 if 'logged_in' not in st.session_state:
@@ -112,12 +134,14 @@ if 'logged_in' not in st.session_state:
     st.session_state['username'] = ''
 if 'show_subscription' not in st.session_state:
     st.session_state['show_subscription'] = False
+if 'brands' not in st.session_state or 'models' not in st.session_state:
+    st.session_state['brands'], st.session_state['models'] = load_brands_models_from_local()
 
 # 主逻辑
 if not st.session_state['logged_in']:
     st.title("登录")
     tab1, tab2 = st.tabs(["登录", "注册"])
-    
+
     with tab1:
         email = st.text_input("邮箱", key="login_email")
         password = st.text_input("密码", type="password", key="login_password")
@@ -141,7 +165,7 @@ else:
             st.rerun()
     else:
         st.title("小贸助手 - 汽车数据分析平台")
-        
+
         col1, col2 = st.columns([3, 1])
         with col1:
             st.write(f"欢迎, {st.session_state['username']}!")
@@ -152,7 +176,7 @@ else:
                 st.session_state['username'] = ''
                 st.session_state['show_subscription'] = False
                 st.rerun()
-        
+
         if st.button("提建议"):
             with st.form(key="suggestion_form"):
                 suggestion = st.text_area("请输入您的建议")
@@ -177,18 +201,58 @@ else:
         else:
             st.success("您当前是高级版用户，享有全部功能权限！")
 
+        # 数据选择
         countries = ["俄罗斯AVITO", "俄罗斯AUTORU", "哈萨克KOLESA"]
-        country = st.selectbox("国家", countries, index=2)
-        brands, models = fetch_brands_models(country)
-        brand = st.selectbox("品牌", brands)
-        model = st.selectbox("型号", models[brand])
+        data_types = ["当日", "历史回溯"]
+        country = st.selectbox("国家", countries, index=2, key="country")
+        if st.button("更新品牌-车型"):
+            st.session_state['brands'], st.session_state['models'] = fetch_brands_models_from_api(country)
+            save_brands_models_to_local(st.session_state['brands'], st.session_state['models'])
+            st.success("品牌和车型列表已更新！")
+        brand = st.selectbox("品牌", st.session_state['brands'], key="brand")
+        model = st.selectbox("型号", st.session_state['models'].get(brand, []), key="model")
+        data_type = st.selectbox("数据类型", data_types, key="data_type")
+
+        # 图表类型动态更新
+        trend_options = []
+        if data_type == "当日":
+            if model == "全车型":
+                trend_options = ["品牌总广告"]
+            else:
+                if country == "哈萨克KOLESA":
+                    trend_options = ["价格区间-广告量", "价格-观看量"]
+                else:
+                    trend_options = ["价格区间-广告量"]
+        elif data_type == "历史回溯":
+            if model == "全车型":
+                trend_options = ["品牌-每日总广告量-时间"]
+                if country == "哈萨克KOLESA":
+                    trend_options.append("品牌-每日总观看量-时间")
+            else:
+                trend_options = ["车型-每日总广告量-时间", "车型-平均价格-时间"]
+                if country == "哈萨克KOLESA":
+                    trend_options.append("车型-每日总观看量-时间")
+        trend = st.selectbox("图表类型", trend_options, key="trend")
+
         if st.button("生成图表"):
-            data = fetch_data(country, brand, model)
+            data = fetch_data(country, brand, model, data_type, trend)
             if data:
-                fig = go.Figure(data=[go.Bar(x=data.get("dates", []), y=data.get("values", []))])
-                fig.update_layout(
-                    title=f"{country} - {brand} {model} 数据",
-                    xaxis_title="日期",
-                    yaxis_title="值"
-                )
+                fig = go.Figure()
+                if "价格区间-广告量" in trend:
+                    x = [f"{x.split(' - ')[0]}-{x.split(' - ')[1]}" for x in data["x"]]
+                    fig.add_trace(go.Bar(x=x, y=data["y"], name="广告量"))
+                    fig.update_layout(xaxis_title="价格区间", yaxis_title="广告数量")
+                elif "价格-观看量" in trend:
+                    fig.add_trace(go.Scatter(x=data["x"], y=data["y"], mode="markers", name="观看量"))
+                    if "avg_price" in data and data["avg_price"]:
+                        fig.add_vline(x=data["avg_price"], line_dash="dash", line_color="red",
+                                      annotation_text="平均价格")
+                    if "median_price" in data and data["median_price"]:
+                        fig.add_vline(x=data["median_price"], line_dash="dash", line_color="green",
+                                      annotation_text="中位数价格")
+                    fig.update_layout(xaxis_title="价格", yaxis_title="观看量")
+                else:
+                    fig.add_trace(go.Scatter(x=data["x"], y=data["y"], mode="lines+markers", name=trend.split("-")[1]))
+                    fig.update_layout(xaxis_title="时间", yaxis_title=trend.split("-")[1])
+                fig.update_layout(title=f"{trend} ({country} - {brand} {model})")
                 st.plotly_chart(fig)
