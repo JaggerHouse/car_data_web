@@ -5,8 +5,8 @@ import logging
 import hashlib
 import time
 import os
+import json
 from payment_handler import init_stripe, display_subscription_plans, handle_subscription_status
-from cache_handler import CacheHandler
 from dotenv import load_dotenv
 import re
 
@@ -20,17 +20,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 LOCAL_BRANDS_MODELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brands_models.json")
 
-# 初始化Stripe和缓存系统
+# 初始化 Stripe
 stripe_config = init_stripe()
-cache_handler = CacheHandler()
+
 
 # 验证邮箱格式的函数
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
 
 def register_user(email, company_name, password):
     if not is_valid_email(email):
@@ -56,6 +58,7 @@ def register_user(email, company_name, password):
         st.error('注册失败，服务器错误')
     return False
 
+
 def login_user(email, password):
     payload = {
         'email': email,
@@ -68,6 +71,11 @@ def login_user(email, password):
             st.session_state['logged_in'] = True
             st.session_state['user_email'] = email
             st.session_state['username'] = data['company_name']
+            st.session_state['subscription_status'] = data['subscription_status']
+            st.session_state['query_count'] = data['query_count']
+            st.success(f"登录成功！订阅状态：{data['subscription_status']}")
+            if data['subscription_status'] == "free":
+                st.info(f"免费版剩余查询次数：{5 - data['query_count']}")
             return True
         else:
             st.error('邮箱或密码错误')
@@ -75,6 +83,7 @@ def login_user(email, password):
         logging.error(f"Login API error: {e}")
         st.error('登录失败，服务器错误')
     return False
+
 
 def fetch_brands_models_from_api(country="哈萨克KOLESA"):
     url = f"{API_BASE_URL}/api/brands_models?country={country}"
@@ -90,6 +99,7 @@ def fetch_brands_models_from_api(country="哈萨克KOLESA"):
         logging.error(f"Failed to fetch brands/models from API: {e}")
     return ["Zeekr", "BYD"], {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}
 
+
 def save_brands_models_to_local(brands, models):
     data = {"brands": brands, "models": models}
     try:
@@ -99,46 +109,58 @@ def save_brands_models_to_local(brands, models):
     except Exception as e:
         logging.error(f"Failed to save brands/models: {e}")
 
+
 def load_brands_models_from_local():
     if os.path.exists(LOCAL_BRANDS_MODELS_FILE):
         try:
             with open(LOCAL_BRANDS_MODELS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get("brands", ["Zeekr", "BYD"]), data.get("models", {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]})
+                return data.get("brands", ["Zeekr", "BYD"]), data.get("models", {"Zeekr": ["7X", "001", "全车型"],
+                                                                                 "BYD": ["Han", "Song", "全车型"]})
         except Exception as e:
             logging.error(f"Failed to load local brands/models: {e}")
     return ["Zeekr", "BYD"], {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}
 
-def fetch_data(country, brand, model, data_type, trend):
-    url = f"{API_BASE_URL}/api/trend?country={country}&brand={brand}&model={model}&data_type={data_type}&type={trend}"
+
+def fetch_data(country, brand, model, data_type, trend, email):
+    payload = {"email": email}
     try:
-        response = requests.get(url, timeout=5)
-        logging.info(f"Fetching data from: {url}, Status: {response.status_code}")
-        if response.status_code == 200:
-            data = response.json()["data"]
-            return data
+        response = requests.post(f"{API_BASE_URL}/api/query", json=payload, timeout=5)
+        if response.status_code == 200 and response.json().get("allow"):
+            url = f"{API_BASE_URL}/api/trend?country={country}&brand={brand}&model={model}&data_type={data_type}&type={trend}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()["data"]
+                return data
+            else:
+                return {"x": ["请求错误"], "y": [0]}
         else:
-            return {"x": ["请求错误"], "y": [0]}
+            st.error("免费用户查询次数已达上限，请升级到高级版")
+            return None
     except requests.RequestException as e:
         logging.error(f"Failed to fetch data: {e}")
         return {"x": ["网络错误"], "y": [0]}
+
 
 def format_price_range(price_str, currency="KZT"):
     try:
         start, end = map(float, price_str.strip("()[]").split(", "))
         if currency in ["KZT", "RUB"]:
-            return f"{start/1000000:.2f}-{end/1000000:.2f}百万"
+            return f"{start / 1000000:.2f}-{end / 1000000:.2f}百万"
         elif currency == "USD":
-            return f"{start/1000:.1f}-{end/1000:.1f}k"
+            return f"{start / 1000:.1f}-{end / 1000:.1f}k"
         return f"{int(start)}-{int(end)}"
     except:
         return price_str
+
 
 # 初始化状态
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user_email'] = ''
     st.session_state['username'] = ''
+    st.session_state['subscription_status'] = ''
+    st.session_state['query_count'] = 0
 if 'show_subscription' not in st.session_state:
     st.session_state['show_subscription'] = False
 if 'brands' not in st.session_state or 'models' not in st.session_state:
@@ -148,7 +170,7 @@ if 'brands' not in st.session_state or 'models' not in st.session_state:
 if not st.session_state['logged_in']:
     st.title("登录")
     tab1, tab2 = st.tabs(["登录", "注册"])
-    
+
     with tab1:
         email = st.text_input("邮箱", key="login_email")
         password = st.text_input("密码", type="password", key="login_password")
@@ -172,7 +194,7 @@ else:
             st.rerun()
     else:
         st.title("小贸助手 - 汽车数据分析平台")
-        
+
         col1, col2 = st.columns([3, 1])
         with col1:
             st.write(f"欢迎, {st.session_state['username']}!")
@@ -183,7 +205,7 @@ else:
                 st.session_state['username'] = ''
                 st.session_state['show_subscription'] = False
                 st.rerun()
-        
+
         if st.button("提建议"):
             with st.form(key="suggestion_form"):
                 suggestion = st.text_area("请输入您的建议")
@@ -199,8 +221,7 @@ else:
                         with open("suggestions.txt", "a", encoding="utf-8") as f:
                             f.write(f"邮箱: {contact_email}, 建议: {suggestion}, 时间: {time.ctime()}\n")
 
-        subscription_status = handle_subscription_status(st.session_state['user_email'])
-        if subscription_status == "free":
+        if st.session_state['subscription_status'] == "free":
             st.warning("您当前使用的是免费版本，5次体验查询机会，升级到高级版本无限次查询每日更新数据！")
             if st.button("查看订阅计划"):
                 st.session_state['show_subscription'] = True
@@ -242,7 +263,7 @@ else:
         trend = st.selectbox("图表类型", trend_options, key="trend")
 
         if st.button("生成图表"):
-            data = fetch_data(country, brand, model, data_type, trend)
+            data = fetch_data(country, brand, model, data_type, trend, st.session_state['user_email'])
             if data:
                 fig = go.Figure()
                 if "价格区间-广告量" in trend:
@@ -252,9 +273,11 @@ else:
                 elif "价格-观看量" in trend:
                     fig.add_trace(go.Scatter(x=data["x"], y=data["y"], mode="markers", name="观看量"))
                     if "avg_price" in data and data["avg_price"]:
-                        fig.add_vline(x=data["avg_price"], line_dash="dash", line_color="red", annotation_text="平均价格")
+                        fig.add_vline(x=data["avg_price"], line_dash="dash", line_color="red",
+                                      annotation_text="平均价格")
                     if "median_price" in data and data["median_price"]:
-                        fig.add_vline(x=data["median_price"], line_dash="dash", line_color="green", annotation_text="中位数价格")
+                        fig.add_vline(x=data["median_price"], line_dash="dash", line_color="green",
+                                      annotation_text="中位数价格")
                     fig.update_layout(xaxis_title="价格", yaxis_title="观看量")
                 else:
                     fig.add_trace(go.Scatter(x=data["x"], y=data["y"], mode="lines+markers", name=trend.split("-")[1]))

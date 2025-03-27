@@ -9,6 +9,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 
+
 def init_stripe():
     logging.info("Initializing Stripe configuration")
     return {
@@ -16,6 +17,7 @@ def init_stripe():
         "secret_key": os.getenv("STRIPE_SECRET_KEY"),
         "webhook_secret": os.getenv("STRIPE_WEBHOOK_SECRET")
     }
+
 
 def create_checkout_session(price_id: str, user_email: str):
     try:
@@ -49,6 +51,7 @@ def create_checkout_session(price_id: str, user_email: str):
         st.error(f"创建支付会话失败: {str(e)}")
         return None
 
+
 def handle_subscription_status(user_email: str) -> str:
     query_params = st.query_params
     if "success" in query_params and query_params["success"] == "true":
@@ -69,7 +72,7 @@ def handle_subscription_status(user_email: str) -> str:
             logging.error(f"Subscription API error: {e}")
             st.error("订阅更新失败，服务器错误")
         return "free"
-    
+
     try:
         response = requests.get(f"{API_BASE_URL}/api/subscription?email={user_email}", timeout=5)
         if response.status_code == 200:
@@ -90,6 +93,7 @@ def handle_subscription_status(user_email: str) -> str:
     except requests.RequestException as e:
         logging.error(f"Fetch subscription status error: {e}")
         return "free"
+
 
 def display_subscription_plans():
     logging.info("Displaying subscription plans")
