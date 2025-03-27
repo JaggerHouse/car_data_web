@@ -6,14 +6,12 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-
 def init_stripe():
     return {
         "publishable_key": os.getenv("STRIPE_PUBLISHABLE_KEY"),
         "secret_key": os.getenv("STRIPE_SECRET_KEY"),
         "webhook_secret": os.getenv("STRIPE_WEBHOOK_SECRET")
     }
-
 
 def create_checkout_session(price_id: str, user_email: str):
     try:
@@ -36,14 +34,12 @@ def create_checkout_session(price_id: str, user_email: str):
         st.error(f"创建支付会话失败: {str(e)}")
         return None
 
-
 def handle_subscription_status(user_email: str) -> str:
     query_params = st.query_params
     if "success" in query_params and query_params["success"] == "true":
         logging.info(f"User {user_email} upgraded to premium")
         return "premium"
     return "free"
-
 
 def display_subscription_plans():
     plans = {
@@ -69,11 +65,8 @@ def display_subscription_plans():
                 st.session_state['user_email']
             )
             if session:
-                st.success("正在跳转到支付页面...")
-                # 尝试直接跳转
+                st.success("支付会话创建成功！")
+                st.write(f"支付链接: {session.url}")
                 st.markdown(f'<a href="{session.url}" target="_blank">点击此处前往支付页面</a>', unsafe_allow_html=True)
-                # 或用按钮
-                if st.button("立即支付", key="redirect"):
-                    st.markdown(f'<script>window.location.href="{session.url}";</script>', unsafe_allow_html=True)
         else:
             st.warning("请先登录")
