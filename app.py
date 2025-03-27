@@ -5,7 +5,6 @@ import logging
 import hashlib
 import time
 import os
-import json
 from datetime import datetime, timedelta
 from payment_handler import init_stripe, display_subscription_plans, handle_subscription_status
 from cache_handler import CacheHandler
@@ -18,67 +17,65 @@ load_dotenv()
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# API 和本地文件配置
+# API 配置
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 LOCAL_BRANDS_MODELS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brands_models.json")
-USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
 
 # 初始化Stripe和缓存系统
 stripe_config = init_stripe()
 cache_handler = CacheHandler()
 
-
 # 验证邮箱格式的函数
 def is_valid_email(email):
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a.zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def register_user(email, company_name, password):
-    users = load_users()
     if not is_valid_email(email):
         st.error('邮箱格式不正确，必须是 xxxx@xxxx.com 的形式')
         return False
-    if email in users:
-        st.error('该邮箱已注册')
-        return False
-    users[email] = {
+    payload = {
+        'email': email,
         'company_name': company_name,
-        'password': hash_password(password),
-        'subscription_status': 'free',
-        'subscription_expiry': None
+        'password': hash_password(password)
     }
-    save_users(users)
-    st.success("注册成功，请用邮箱登录")
-    time.sleep(2)
-    return True
-
-
-def login_user(email, password):
-    users = load_users()
-    if email in users:
-        user = users[email]
-        if user['password'] == hash_password(password):
-            st.session_state['logged_in'] = True
-            st.session_state['user_email'] = email
-            st.session_state['username'] = user['company_name']
+    try:
+        response = requests.post(f"{API_BASE_URL}/api/register", json=payload, timeout=5)
+        if response.status_code == 200:
+            st.success("注册成功，请用邮箱登录")
+            time.sleep(2)
             return True
-    if email == "hzhbond@hotmail.com" and password == "admin":
-        st.session_state['logged_in'] = True
-        st.session_state['user_email'] = email
-        st.session_state['username'] = "TestUser"
-        if email not in users:
-            users[email] = {
-                'company_name': "TestUser",
-                'password': hash_password(password),
-                'subscription_status': 'free',
-                'subscription_expiry': None
-            }
-            save_users(users)
-        return True
-    st.error('邮箱或密码错误')
+        elif response.status_code == 409:
+            st.error('该邮箱已注册')
+        else:
+            st.error('注册失败，请稍后重试')
+    except requests.RequestException as e:
+        logging.error(f"Register API error: {e}")
+        st.error('注册失败，服务器错误')
     return False
 
+def login_user(email, password):
+    payload = {
+        'email': email,
+        'password': hash_password(password)
+    }
+    try:
+        response = requests.post(f"{API_BASE_URL}/api/login", json=payload, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            st.session_state['logged_in'] = True
+            st.session_state['user_email'] = email
+            st.session_state['username'] = data['company_name']
+            return True
+        else:
+            st.error('邮箱或密码错误')
+    except requests.RequestException as e:
+        logging.error(f"Login API error: {e}")
+        st.error('登录失败，服务器错误')
+    return False
 
 def fetch_brands_models_from_api(country="哈萨克KOLESA"):
     url = f"{API_BASE_URL}/api/brands_models?country={country}"
@@ -94,7 +91,6 @@ def fetch_brands_models_from_api(country="哈萨克KOLESA"):
         logging.error(f"Failed to fetch brands/models from API: {e}")
     return ["Zeekr", "BYD"], {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}
 
-
 def save_brands_models_to_local(brands, models):
     data = {"brands": brands, "models": models}
     try:
@@ -104,18 +100,15 @@ def save_brands_models_to_local(brands, models):
     except Exception as e:
         logging.error(f"Failed to save brands/models: {e}")
 
-
 def load_brands_models_from_local():
     if os.path.exists(LOCAL_BRANDS_MODELS_FILE):
         try:
             with open(LOCAL_BRANDS_MODELS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get("brands", ["Zeekr", "BYD"]), data.get("models", {"Zeekr": ["7X", "001", "全车型"],
-                                                                                 "BYD": ["Han", "Song", "全车型"]})
+                return data.get("brands", ["Zeekr", "BYD"]), data.get("models", {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]})
         except Exception as e:
             logging.error(f"Failed to load local brands/models: {e}")
     return ["Zeekr", "BYD"], {"Zeekr": ["7X", "001", "全车型"], "BYD": ["Han", "Song", "全车型"]}
-
 
 def fetch_data(country, brand, model, data_type, trend):
     url = f"{API_BASE_URL}/api/trend?country={country}&brand={brand}&model={model}&data_type={data_type}&type={trend}"
@@ -131,18 +124,16 @@ def fetch_data(country, brand, model, data_type, trend):
         logging.error(f"Failed to fetch data: {e}")
         return {"x": ["网络错误"], "y": [0]}
 
-
 def format_price_range(price_str, currency="KZT"):
     try:
         start, end = map(float, price_str.strip("()[]").split(", "))
         if currency in ["KZT", "RUB"]:
-            return f"{start / 1000000:.2f}-{end / 1000000:.2f}百万"
+            return f"{start/1000000:.2f}-{end/1000000:.2f}百万"
         elif currency == "USD":
-            return f"{start / 1000:.1f}-{end / 1000:.1f}k"
+            return f"{start/1000:.1f}-{end/1000:.1f}k"
         return f"{int(start)}-{int(end)}"
     except:
         return price_str
-
 
 # 初始化状态
 if 'logged_in' not in st.session_state:
@@ -158,7 +149,7 @@ if 'brands' not in st.session_state or 'models' not in st.session_state:
 if not st.session_state['logged_in']:
     st.title("登录")
     tab1, tab2 = st.tabs(["登录", "注册"])
-
+    
     with tab1:
         email = st.text_input("邮箱", key="login_email")
         password = st.text_input("密码", type="password", key="login_password")
@@ -182,7 +173,7 @@ else:
             st.rerun()
     else:
         st.title("小贸助手 - 汽车数据分析平台")
-
+        
         col1, col2 = st.columns([3, 1])
         with col1:
             st.write(f"欢迎, {st.session_state['username']}!")
@@ -193,7 +184,7 @@ else:
                 st.session_state['username'] = ''
                 st.session_state['show_subscription'] = False
                 st.rerun()
-
+        
         if st.button("提建议"):
             with st.form(key="suggestion_form"):
                 suggestion = st.text_area("请输入您的建议")
@@ -262,11 +253,9 @@ else:
                 elif "价格-观看量" in trend:
                     fig.add_trace(go.Scatter(x=data["x"], y=data["y"], mode="markers", name="观看量"))
                     if "avg_price" in data and data["avg_price"]:
-                        fig.add_vline(x=data["avg_price"], line_dash="dash", line_color="red",
-                                      annotation_text="平均价格")
+                        fig.add_vline(x=data["avg_price"], line_dash="dash", line_color="red", annotation_text="平均价格")
                     if "median_price" in data and data["median_price"]:
-                        fig.add_vline(x=data["median_price"], line_dash="dash", line_color="green",
-                                      annotation_text="中位数价格")
+                        fig.add_vline(x=data["median_price"], line_dash="dash", line_color="green", annotation_text="中位数价格")
                     fig.update_layout(xaxis_title="价格", yaxis_title="观看量")
                 else:
                     fig.add_trace(go.Scatter(x=data["x"], y=data["y"], mode="lines+markers", name=trend.split("-")[1]))

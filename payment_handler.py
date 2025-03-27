@@ -1,13 +1,13 @@
 import stripe
 import streamlit as st
 import os
+import requests
 import logging
 from datetime import datetime, timedelta
-import json
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://156.225.26.202:5000')
 
 def init_stripe():
     logging.info("Initializing Stripe configuration")
@@ -16,24 +16,6 @@ def init_stripe():
         "secret_key": os.getenv("STRIPE_SECRET_KEY"),
         "webhook_secret": os.getenv("STRIPE_WEBHOOK_SECRET")
     }
-
-# 用户数据持久化
-def load_users():
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logging.error(f"Failed to load users: {e}")
-    return {}
-
-def save_users(users):
-    try:
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users, f, ensure_ascii=False, indent=2)
-        logging.info("Users data saved successfully")
-    except Exception as e:
-        logging.error(f"Failed to save users: {e}")
 
 def create_checkout_session(price_id: str, user_email: str):
     try:
@@ -67,29 +49,48 @@ def create_checkout_session(price_id: str, user_email: str):
         st.error(f"创建支付会话失败: {str(e)}")
         return None
 
-
 def handle_subscription_status(user_email: str) -> str:
-    users = load_users()
     query_params = st.query_params
     if "success" in query_params and query_params["success"] == "true":
-        if user_email in users:
-            users[user_email]['subscription_status'] = 'premium'
-            users[user_email]['subscription_expiry'] = (datetime.now() + timedelta(days=30)).isoformat()
-            save_users(users)
-            logging.info(f"User {user_email} upgraded to premium, expiry: {users[user_email]['subscription_expiry']}")
-            return "premium"
-
-    if user_email in users and users[user_email]['subscription_status'] == 'premium':
-        expiry_date = datetime.fromisoformat(users[user_email]['subscription_expiry'])
-        if datetime.now() < expiry_date:
-            return "premium"
-        else:
-            users[user_email]['subscription_status'] = 'free'
-            users[user_email]['subscription_expiry'] = None
-            save_users(users)
-            logging.info(f"User {user_email} subscription expired")
-    return "free"
-
+        expiry_date = (datetime.now() + timedelta(days=30)).isoformat()
+        payload = {
+            'email': user_email,
+            'subscription_status': 'premium',
+            'subscription_expiry': expiry_date
+        }
+        try:
+            response = requests.post(f"{API_BASE_URL}/api/subscription", json=payload, timeout=5)
+            if response.status_code == 200:
+                logging.info(f"User {user_email} upgraded to premium, expiry: {expiry_date}")
+                return "premium"
+            else:
+                st.error("订阅更新失败")
+        except requests.RequestException as e:
+            logging.error(f"Subscription API error: {e}")
+            st.error("订阅更新失败，服务器错误")
+        return "free"
+    
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/subscription?email={user_email}", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data['subscription_status'] == 'premium':
+                expiry_date = datetime.fromisoformat(data['subscription_expiry'])
+                if datetime.now() < expiry_date:
+                    return "premium"
+                else:
+                    # 更新为过期状态
+                    payload = {
+                        'email': user_email,
+                        'subscription_status': 'free',
+                        'subscription_expiry': None
+                    }
+                    requests.post(f"{API_BASE_URL}/api/subscription", json=payload, timeout=5)
+                    logging.info(f"User {user_email} subscription expired")
+        return "free"
+    except requests.RequestException as e:
+        logging.error(f"Fetch subscription status error: {e}")
+        return "free"
 
 def display_subscription_plans():
     logging.info("Displaying subscription plans")
